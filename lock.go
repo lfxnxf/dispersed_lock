@@ -1,7 +1,7 @@
 package dispersed_lock
 
 import (
-	"github.com/garyburd/redigo/redis"
+	"github.com/gomodule/redigo/redis"
 	"github.com/lfxnxf/while"
 	"math/rand"
 	"strings"
