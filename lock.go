@@ -75,14 +75,18 @@ func (d *DispersedLock) Lock() bool {
 }
 
 //循环加锁
-func (d *DispersedLock) LoopLock(sleepTime int) bool {
+func (d *DispersedLock) LoopLock(ctx context.Context, sleepTime int) bool {
 	t := time.NewTicker(time.Duration(sleepTime) * time.Millisecond)
-	for {
-		if d.Lock() {
+	w := utils.NewWhile(lockMaxLoopNum)
+	w.For(func() {
+		if d.Lock(ctx) {
 			t.Stop()
-			break
+			w.Break()
 		}
 		<-t.C
+	})
+	if !w.IsNormal() {
+		return false
 	}
 	return true
 }
