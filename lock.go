@@ -19,7 +19,6 @@ const (
 	lockMaxLoopNum = 1000 //加锁最大循环数量
 )
 
-var clientMap sync.Map
 var scriptMap sync.Map
 
 type option func() (bool, error)
