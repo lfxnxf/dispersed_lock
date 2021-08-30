@@ -82,8 +82,9 @@ func (d *DispersedLock) LoopLock(ctx context.Context, sleepTime int) bool {
 		if d.Lock(ctx) {
 			t.Stop()
 			w.Break()
+		} else {
+			<-t.C
 		}
-		<-t.C
 	})
 	if !w.IsNormal() {
 		return false
