@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 	"git.huajiao.com/infra/go-kit/zlog"
-	"git.huajiao.com/infra/go-zero/core/stores/redis"
-	"git.huajiao.com/infra/go-zero/core/utils"
+	"github.com/go-redis/redis/v8"
+	"github.com/lfxnxf/while"
 	"go.uber.org/zap"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -37,18 +38,18 @@ type DispersedLock struct {
 	key            string        // 锁key
 	value          string        // 锁的值，随机数
 	expire         int           // 锁过期时间,单位秒
-	lockClient     *redis.Redis  // 锁客户端，暂时只有redis
+	lockClient     redis.Cmdable  // 锁客户端，暂时只有redis
 	unLockScript   string        // lua脚本
 	watchLogScript string        // 看门狗lua
 	options        []option      // 事件
 	unlockCh       chan struct{} // 解锁通知通道
 }
 
-func New(ctx context.Context, client *redis.Redis, key string, expire int) *DispersedLock {
+func New(ctx context.Context, client redis.Cmdable, key string, expire int) *DispersedLock {
 	d := &DispersedLock{
 		key:    key,
 		expire: expire,
-		value:  fmt.Sprintf("%d", utils.Random(100000000, 999999999)), // 随机值作为锁的值
+		value:  fmt.Sprintf("%d", Random(100000000, 999999999)), // 随机值作为锁的值
 	}
 
 	//初始化连接
@@ -67,7 +68,7 @@ func New(ctx context.Context, client *redis.Redis, key string, expire int) *Disp
 }
 
 func (d *DispersedLock) getScript(ctx context.Context, script string) string {
-	scriptString, _ := d.lockClient.ScriptLoad(ctx, script)
+	scriptString, _ := d.lockClient.ScriptLoad(ctx, script).Result()
 	return scriptString
 }
 
@@ -78,7 +79,7 @@ func (d *DispersedLock) RegisterOptions(f ...option) {
 
 //加锁
 func (d *DispersedLock) Lock(ctx context.Context) bool {
-	ok, _ := d.lockClient.SetnxEx(ctx, d.key, d.value, d.expire)
+	ok, _ := d.lockClient.SetNX(ctx, d.key, d.value, time.Duration(d.expire)*time.Second).Result()
 	if ok {
 		go d.watchDog(ctx)
 	}
@@ -88,7 +89,7 @@ func (d *DispersedLock) Lock(ctx context.Context) bool {
 //循环加锁
 func (d *DispersedLock) LoopLock(ctx context.Context, sleepTime int) bool {
 	t := time.NewTicker(time.Duration(sleepTime) * time.Millisecond)
-	w := utils.NewWhile(lockMaxLoopNum)
+	w := while.NewWhile(lockMaxLoopNum)
 	w.For(func() {
 		if d.Lock(ctx) {
 			t.Stop()
@@ -107,7 +108,7 @@ func (d *DispersedLock) LoopLock(ctx context.Context, sleepTime int) bool {
 //eg:单个线程获取缓存、其它线程等待
 func (d *DispersedLock) LoopLockWithOption(ctx context.Context, sleepTime int) (bool, error) {
 	t := time.NewTicker(time.Duration(sleepTime) * time.Millisecond)
-	w := utils.NewWhile(lockMaxLoopNum)
+	w := while.NewWhile(lockMaxLoopNum)
 	var err error
 	w.For(func() {
 		locked := d.Lock(ctx)
@@ -144,7 +145,7 @@ func (d *DispersedLock) Unlock(ctx context.Context) bool {
 	args := []interface{}{
 		d.value, // 脚本中的argv
 	}
-	flag, _ := d.lockClient.EvalSha(ctx, d.unLockScript, []string{d.key}, args...)
+	flag, _ := d.lockClient.EvalSha(ctx, d.unLockScript, []string{d.key}, args...).Result()
 	// 关闭看门狗
 	d.unlockCh <- struct{}{}
 	return lockRes(flag.(int64))
@@ -163,7 +164,7 @@ func (d *DispersedLock) watchDog(ctx context.Context) {
 				d.value,
 				d.expire,
 			}
-			res, err := d.lockClient.EvalSha(ctx, d.watchLogScript, []string{d.key}, args...)
+			res, err := d.lockClient.EvalSha(ctx, d.watchLogScript, []string{d.key}, args...).Result()
 			if err != nil {
 				zlog.TraceError(ctx, "watchDog error", zap.Error(err))
 				return
@@ -187,5 +188,10 @@ func lockRes(flag int64) bool {
 	} else {
 		return false
 	}
+}
+
+func Random(min, max int64) int64 {
+	rand.Seed(time.Now().UnixNano())
+	return rand.Int63n(max-min+1) + min
 }
 
