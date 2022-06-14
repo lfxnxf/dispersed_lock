@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/go-redis/redis/v8"
 	"github.com/lfxnxf/while"
-	"go.uber.org/zap"
 	"math/rand"
 	"sync"
 	"time"
