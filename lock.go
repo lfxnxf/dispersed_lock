@@ -165,7 +165,7 @@ func (d *DispersedLock) watchDog(ctx context.Context) {
 			}
 			res, err := d.lockClient.EvalSha(ctx, d.watchLogScript, []string{d.key}, args...).Result()
 			if err != nil {
-				zlog.TraceError(ctx, "watchDog error", zap.Error(err))
+				fmt.Println("watchDog error", err)
 				return
 			}
 			r, ok := res.(int64)
