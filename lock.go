@@ -3,7 +3,6 @@ package dispersed_lock
 import (
 	"context"
 	"fmt"
-	"git.huajiao.com/infra/go-kit/zlog"
 	"github.com/go-redis/redis/v8"
 	"github.com/lfxnxf/while"
 	"go.uber.org/zap"
