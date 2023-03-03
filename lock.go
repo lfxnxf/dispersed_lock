@@ -145,7 +145,7 @@ func (d *DispersedLock) Unlock(ctx context.Context) bool {
 	}
 	flag, _ := d.lockClient.EvalSha(ctx, d.unLockScript, []string{d.key}, args...).Result()
 	// 关闭看门狗
-	d.unlockCh <- struct{}{}
+	close(d.unlockCh)
 	return lockRes(flag.(int64))
 }
 
